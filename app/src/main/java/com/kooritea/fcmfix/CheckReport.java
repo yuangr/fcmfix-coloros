@@ -294,6 +294,7 @@ final class CheckReport {
     private void addHookRow(Bundle status, String process, String label) {
         List<String> active = status.getStringArrayList(process + HookStatus.ACTIVE_SUFFIX);
         List<String> failed = status.getStringArrayList(process + HookStatus.FAILED_SUFFIX);
+        List<String> skipped = status.getStringArrayList(process + HookStatus.SKIPPED_SUFFIX);
         String title = label + " Hook";
         Row row;
         if (active == null || failed == null) {
@@ -302,9 +303,15 @@ final class CheckReport {
             row = add(Level.WARN, title, active.size() + " 项生效，" + failed.size() + " 项失配：\n" + String.join("\n", failed),
                     "失配的项目与当前固件不匹配，请导出完整报告反馈");
         } else {
-            row = add(Level.OK, title, active.size() + " 项生效", null);
+            row = add(Level.OK, title, active.size() + " 项生效"
+                    + (skipped == null || skipped.isEmpty() ? "" : "，" + skipped.size()
+                    + " 项不适用（未安装）：\n" + String.join("\n", skipped)), null);
         }
         if (active != null && !active.isEmpty()) row.copyExtra = "生效：" + String.join("、", active);
+        if (skipped != null && !skipped.isEmpty()) {
+            row.copyExtra = (row.copyExtra == null ? "" : row.copyExtra + "\n")
+                    + "不适用（未安装）：" + String.join("、", skipped);
+        }
     }
 
     private void addConfigRows(XposedService service, Bundle status) {

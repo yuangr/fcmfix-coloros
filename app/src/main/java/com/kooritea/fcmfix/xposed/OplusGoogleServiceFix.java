@@ -9,6 +9,7 @@ import com.kooritea.fcmfix.libxposed.XposedHelpers;
 import com.kooritea.fcmfix.util.NightNetworkWhitelist;
 
 import java.lang.reflect.Method;
+import com.kooritea.fcmfix.util.NightHookCompatibility;
 
 import static com.kooritea.fcmfix.util.HookResults.findEnumConstant;
 import static com.kooritea.fcmfix.xposed.OplusHooks.*;
@@ -69,13 +70,12 @@ public class OplusGoogleServiceFix extends XposedModule {
      */
     private void startHookDeepSleepGmsForceStop() {
         int hooks = 0;
-        for (int i = 1; i <= 30 && hooks == 0; i++) {
+        for (int i = 1; i <= 30; i++) {
             Class<?> clazz = XposedHelpers.findClassIfExists(OSENSE_RES_MANAGER_SERVICE + "$" + i, classLoader);
             if (clazz == null) continue;
             for (Method method : clazz.getDeclaredMethods()) {
                 Class<?>[] types = method.getParameterTypes();
-                if (!"requestSceneActionSync".equals(method.getName()) || types.length != 1
-                        || types[0] != android.os.Bundle.class || !isBooleanType(method.getReturnType())) {
+                if (!NightHookCompatibility.isSceneRequest(method, android.os.Bundle.class)) {
                     continue;
                 }
                 XposedBridge.hookMethod(method, new XC_MethodHook() {
@@ -87,7 +87,12 @@ public class OplusGoogleServiceFix extends XposedModule {
                                 || !DEEP_SLEEP_GMS_CLEAN_REASON.equals(bundle.getString("reason"))) {
                             return;
                         }
-                        param.setResult(Boolean.FALSE);
+                        if (method.getReturnType() == void.class
+                                && !NightHookCompatibility.shouldBlockAsyncClean(
+                                        bundle.getString("pkgName"), bundle.getString("reason"),
+                                        bundle.getString("action"), bundle.getString("subAction"),
+                                        bundle.getInt("strategy", -1))) return;
+                        param.setResult(method.getReturnType() == void.class ? null : Boolean.FALSE);
                         printLog("Oplus deep-sleep GMS force-stop skipped", true);
                     }
                 });
@@ -95,7 +100,7 @@ public class OplusGoogleServiceFix extends XposedModule {
                 printLog("Oplus deep-sleep GMS force-stop hook active: " + describeMethod(method));
             }
         }
-        if (hooks == 0) throw new NoSuchMethodError("OsenseResManagerService$*#requestSceneActionSync(Bundle)");
+        if (hooks == 0) throw new NoSuchMethodError("OsenseResManagerService$*#requestSceneActionSync/requestSceneAction(Bundle)");
     }
 
     /**
@@ -288,7 +293,7 @@ public class OplusGoogleServiceFix extends XposedModule {
      * include its GMS list (chain 9) and blocks their alarms, which drops the FCM connection.
      * Report only the Google core packages as whitelisted for that scene.
      */
-    private void startHookWeakSignalNetWhiteList() {
+    private void startHookWeakSignalNetWhiteList() throws OplusHooks.NotApplicable {
         Class<?> managerClass = XposedHelpers.findClassIfExists(OPLUS_HANS_CONNECTIVITY_MANAGER, classLoader);
         if (managerClass == null) throw new NoClassDefFoundError(OPLUS_HANS_CONNECTIVITY_MANAGER);
 
@@ -310,7 +315,12 @@ public class OplusGoogleServiceFix extends XposedModule {
             hooks++;
             printLog("Oplus weak-signal whitelist hook active: " + describeMethod(method));
         }
-        if (hooks == 0) throw new NoSuchMethodError("isWeakSignalNetWhiteList(String)");
+        if (hooks == 0) {
+            if (NightHookCompatibility.isReviewedLegacyFirmware(android.os.Build.DISPLAY)) {
+                throw new OplusHooks.NotApplicable("PLQ110_16.0.10.500: extracted Hans implementation has no weak-signal whitelist path");
+            }
+            throw new NoSuchMethodError("isWeakSignalNetWhiteList(String)");
+        }
     }
 
     private void startHookRegisterGmsRestrictObserver() {

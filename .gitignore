@@ -8,3 +8,17 @@
 .externalNativeBuild
 .cxx
 .runtime/
+
+# Extracted proprietary firmware and local APK artifacts
+/firmware-analysis/**/*.apk
+/firmware-analysis/**/*.jar
+/device-test-20261009/*.apk
+
+# Local device and audit material
+/audit-evidence/
+/device-test-20261009/
+/firmware-analysis/
+/审查报告-*.md
+/本机适配说明-*.md
+*.jks
+*.keystore

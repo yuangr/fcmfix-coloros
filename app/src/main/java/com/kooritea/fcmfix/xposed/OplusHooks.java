@@ -16,6 +16,10 @@ final class OplusHooks {
     private OplusHooks() {
     }
 
+    static final class NotApplicable extends Exception {
+        NotApplicable(String reason) { super(reason); }
+    }
+
     interface HookAction {
         void run() throws Throwable;
     }
@@ -28,6 +32,9 @@ final class OplusHooks {
         try {
             action.run();
             STATUS.recordActive(name);
+        } catch (NotApplicable e) {
+            STATUS.recordSkipped(name, e.getMessage());
+            XposedModule.printLog("hook not applicable " + name + ": " + e.getMessage());
         } catch (Throwable e) {
             String reason = e.getClass().getSimpleName() + ": " + e.getMessage();
             STATUS.recordFailed(name, reason);

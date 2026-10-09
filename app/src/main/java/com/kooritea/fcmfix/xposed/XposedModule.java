@@ -33,7 +33,7 @@ import java.util.Set;
 import static android.content.Context.NOTIFICATION_SERVICE;
 
 public abstract class XposedModule {
-    protected static final String MODULE_PACKAGE_NAME = "io.github.artifical0.fcmfix.coloros";
+    protected static final String MODULE_PACKAGE_NAME = com.kooritea.fcmfix.BuildConfig.APPLICATION_ID;
     protected static final String ACTION_UPDATE_CONFIG = MODULE_PACKAGE_NAME + ".update.config";
     private static final String ACTION_QUERY_STATUS = MODULE_PACKAGE_NAME + HookStatus.QUERY_ACTION_SUFFIX;
     private static String selfPackageName = "UNKNOWN";
@@ -285,6 +285,7 @@ public abstract class XposedModule {
         if (logs) result.putStringArrayList(process + HookStatus.LOGS_SUFFIX, XposedBridge.recentLogs());
         result.putStringArrayList(process + HookStatus.ACTIVE_SUFFIX, OplusHooks.STATUS.active());
         result.putStringArrayList(process + HookStatus.FAILED_SUFFIX, OplusHooks.STATUS.failed());
+        result.putStringArrayList(process + HookStatus.SKIPPED_SUFFIX, OplusHooks.STATUS.skipped());
         if ("android".equals(process)) {
             result.putBoolean(HookStatus.KEY_IGNORE_GMS_USER_SET, OplusBatteryNetworkFix.batteryIgnoresGmsUserSet());
         }

@@ -1,4 +1,9 @@
-# FCMFix ColorOS
+# FCMFix ColorOS 本机适配
+
+本仓库派生自 [Artifical0/fcmfix-coloros](https://github.com/Artifical0/fcmfix-coloros)，基于 `v13.0-rc6`（`dee734f`）适配 **PLQ110_16.0.10.500(CN01)**。版本 `13.0-rc6-plq110.1`，独立包名 `io.github.artifical0.fcmfix.coloros.local`。
+
+本分支不是上游官方发行版。适配内容及验证边界见 [适配说明](docs/plq110-adaptation.md)。只启用一个 FCMFix 模块。
+
 
 修复 **ColorOS 16 / 17（国行）** 拦截 Google FCM 推送的 LSPosed 模块，需要 **Root + LSPosed**。
 
@@ -7,9 +12,9 @@ GMS 和应用之间。本模块解除这一段的限制，并阻止 ColorOS 切�
 
 | | |
 | --- | --- |
-| 当前版本 | [53-coloros-12.1](https://github.com/Artifical0/fcmfix-coloros/releases/latest)（GitHub Release 与 LSPosed 模块仓库同步） |
+| 当前版本 | `13.0-rc6-plq110.1`（本仓库源码构建） |
 | 支持系统 | ColorOS 16、ColorOS 17（Android 16 / 17）国行 |
-| 验证机型 | 一加 15（PLK110）；其他 ColorOS 16/17 机型可能可用，但未经同等级验证 |
+| 验证机型 | 本适配版：PLQ110 / PLQ110_16.0.10.500(CN01)；上游验证：PLK110 |
 | 作用域 | `系统框架` + `电池`（`com.oplus.battery`），两者都要勾选 |
 | 遇到问题 | [如何提交问题与日志](docs/report-issue.md) |
 
@@ -19,7 +24,7 @@ GMS 和应用之间。本模块解除这一段的限制，并阻止 ColorOS 切�
 ## 安装
 
 1. 确认手机已 Root，并安装可正常工作的 LSPosed（libxposed API 100 及以上）。
-2. 安装 [Release](https://github.com/Artifical0/fcmfix-coloros/releases/latest) 中的 APK，或在 LSPosed 模块仓库中搜索 FCMFix ColorOS。
+2. 按下方构建说明生成并安装本仓库 APK；[上游官方发行版](https://github.com/Artifical0/fcmfix-coloros/releases)与本适配版不同。
 3. 在 LSPosed 中启用模块，作用域**同时勾选**“系统框架”和“电池（`com.oplus.battery`）”。
 4. 重启手机。
 5. 打开 FCMFix，勾选确实需要 FCM 后台推送的应用，或开启“自动放行包含 FCM 的应用”，并确认这些应用的通知权限已开启。
@@ -121,3 +126,17 @@ FCMFix 顶部的状态卡片显示“一切正常”；
 - 上游项目：[kooritea/fcmfix](https://github.com/kooritea/fcmfix)
 
 每个版本的 APK SHA-256 见对应 GitHub Release 说明。
+
+## 构建本适配版
+
+使用 JDK 17 或以上、Android SDK Platform 36 与 Build-Tools 36.0.0：
+
+```sh
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease
+```
+
+测试 APK 位于 `app/build/outputs/apk/debug/app-debug.apk`，使用本地 debug 签名；不同构建环境签名可能不同，不能保证覆盖此前安装的 APK。Release APK 需自行签名。仓库不含密钥、手机固件、反编译源码或个人设备记录。
+
+## 来源与许可
+
+保留上游作者归属和 Git 历史；原始基础项目为 [kooritea/fcmfix](https://github.com/kooritea/fcmfix)。所基于的上游快照未提供独立 LICENSE 文件，本仓库未另行指定或更改其许可。

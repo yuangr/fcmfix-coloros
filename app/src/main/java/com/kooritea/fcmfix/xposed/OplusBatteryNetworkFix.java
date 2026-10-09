@@ -10,6 +10,8 @@ import com.kooritea.fcmfix.libxposed.XposedHelpers;
 import java.lang.reflect.Method;
 
 import static com.kooritea.fcmfix.xposed.OplusHooks.runHook;
+import static com.kooritea.fcmfix.xposed.OplusHooks.describeMethod;
+import com.kooritea.fcmfix.util.NightNetworkWhitelist;
 
 /**
  * ColorOS Battery's GoogleRestrictionController applies POLICY_REJECT_ALL when its
@@ -82,6 +84,34 @@ public class OplusBatteryNetworkFix extends XposedModule {
             });
             hooks++;
             printLog("Oplus Battery deep-sleep whitelist hook active: " + method);
+        }
+        // ColorOS 16 builds the final UID whitelist as a return value, rather than
+        // through addPkgWhiteArray/addUidWhiteArray. Never change the disconnect list.
+        if (hooks == 0) {
+            for (Method method : controllerClass.getDeclaredMethods()) {
+                if (!"determineNetWorkWhiteUidList".equals(method.getName())
+                        || method.getParameterTypes().length != 0
+                        || !java.util.List.class.isAssignableFrom(method.getReturnType())) continue;
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (param.hasThrowable() || !(param.getResult() instanceof java.util.List)
+                                || context == null) return;
+                        int uid;
+                        try {
+                            uid = context.getPackageManager().getPackageUid(GOOGLE_NETWORK_PACKAGES[0], 0);
+                        } catch (PackageManager.NameNotFoundException e) { return; }
+                        if (uid < 0) return;
+                        // Copy so immutable or shared firmware lists remain safe.
+                        java.util.List<Object> whitelist = NightNetworkWhitelist.withUid(
+                                (java.util.List<?>) param.getResult(), uid);
+                        if (whitelist != null) param.setResult(whitelist);
+                        printLog("Oplus Battery deep-sleep network whitelist: GMS uid=" + uid, true);
+                    }
+                });
+                hooks++;
+                printLog("Oplus Battery deep-sleep whitelist hook active: " + describeMethod(method));
+            }
         }
         if (hooks == 0) throw new NoSuchMethodError(DEEP_SLEEP_CONTROLLER + "#addPkgWhiteArray/addUidWhiteArray");
     }

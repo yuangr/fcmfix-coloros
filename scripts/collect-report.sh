@@ -9,7 +9,7 @@ else
 fi
 [ $# -gt 0 ] && shift
 GMS=com.google.android.gms
-MODULE=io.github.artifical0.fcmfix.coloros
+MODULE=io.github.artifical0.fcmfix.coloros.local
 
 section() { echo; echo "== $1"; }
 
