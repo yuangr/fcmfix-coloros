@@ -42,6 +42,8 @@ public abstract class XposedModule {
     static final String TAG = "FcmFix";
     private static volatile ConfigSnapshot config;
     private static boolean reloadRequested;
+    private static final com.kooritea.fcmfix.util.RemoteConfigSubscription CONFIG_SUBSCRIPTION =
+            new com.kooritea.fcmfix.util.RemoteConfigSubscription(XposedModule::onUpdateConfig);
 
     @SuppressLint("StaticFieldLeak")
     protected static volatile Context context = null;
@@ -187,6 +189,7 @@ public abstract class XposedModule {
                 try {
                     SharedPreferences preferences = XposedBridge.getRemotePreferences("config");
                     if (preferences == null) throw new IllegalStateException("RemotePreferences unavailable");
+                    CONFIG_SUBSCRIPTION.bind(preferences);
                     ConfigSnapshot loaded = new ConfigSnapshot(preferences.getAll());
                     config = loaded;
                     if ("android".equals(getSelfPackageName())) NightDiagnostics.configure(loaded.nightDiagnosticsUntil);
