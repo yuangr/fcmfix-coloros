@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 
 import com.kooritea.fcmfix.libxposed.XposedHelpers;
+import com.kooritea.fcmfix.libxposed.XposedBridge;
 import com.kooritea.fcmfix.util.HookStatus;
 
 import java.lang.reflect.Method;
@@ -11,7 +12,7 @@ import java.lang.reflect.Method;
 /** Reflection helpers shared by the ColorOS system_server hooks. */
 final class OplusHooks {
     /** Hook groups installed in this process; reported to the module app on request. */
-    static final HookStatus STATUS = new HookStatus();
+    static final HookStatus STATUS = XposedBridge.hookStatus();
 
     private OplusHooks() {
     }
@@ -29,6 +30,8 @@ final class OplusHooks {
      * The result is recorded for the in-app status, so a group must throw when nothing hooked.
      */
     static void runHook(String name, HookAction action) {
+        String previous = XposedBridge.swapHookGroup(name);
+        STATUS.recordActive(name);
         try {
             action.run();
             STATUS.recordActive(name);
@@ -39,6 +42,8 @@ final class OplusHooks {
             String reason = e.getClass().getSimpleName() + ": " + e.getMessage();
             STATUS.recordFailed(name, reason);
             XposedModule.printLog("hook error " + name + ": " + reason);
+        } finally {
+            XposedBridge.swapHookGroup(previous);
         }
     }
 

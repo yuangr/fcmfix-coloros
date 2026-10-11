@@ -151,6 +151,7 @@ public class OplusDeviceIdleFix extends XposedModule {
         for (String packageName : GOOGLE_DOZE_PACKAGES) {
             if (!whiteList.contains(packageName)) {
                 whiteList.add(packageName);
+                OplusHooks.STATUS.recordEffect("Doze whitelist", android.os.SystemClock.elapsedRealtime());
                 printLog("Oplus Doze whitelist restored: " + packageName, true);
             }
         }

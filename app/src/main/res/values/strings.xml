@@ -24,4 +24,6 @@
     <string name="menu_icebox">允许唤醒被冰箱冻结的应用</string>
     <string name="menu_select_all_fcm">全选包含 FCM 的应用</string>
     <string name="menu_fcm_diagnostics">打开 FCM Diagnostics</string>
+    <string name="menu_night_diagnostics">开始12小时诊断</string>
+    <string name="menu_stop_night_diagnostics">停止夜间诊断</string>
 </resources>

@@ -4,6 +4,15 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class SelfCheckTest {
+    @org.junit.Test public void configRevisionExposesStaleFrameworkAndDeadlineMismatch() {
+        assertEquals(SelfCheck.Level.WARN, SelfCheck.configRevision(1, 2, 5000, 0).level);
+        assertEquals(SelfCheck.Level.WARN, SelfCheck.configRevision(2, 2, 5000, 0).level);
+        assertEquals(SelfCheck.Level.OK, SelfCheck.configRevision(2, 2, 0, 0).level);
+    }
+    @org.junit.Test public void oldFrameworkWithoutRevisionRequiresReboot() {
+        assertEquals(SelfCheck.Level.WARN, SelfCheck.configRevision(-1, 0, 0, 0).level);
+    }
+
     @Test public void gmsPolicyNamesEachRestriction() {
         assertEquals(SelfCheck.Level.OK, SelfCheck.gmsPolicy(0).level);
         assertEquals(SelfCheck.Level.UNKNOWN, SelfCheck.gmsPolicy(SelfCheck.UNKNOWN).level);
@@ -46,12 +55,13 @@ public class SelfCheckTest {
         long start = 1_000_000;
         SelfCheck.Verdict connected = SelfCheck.fcmConnection(SelfCheck.FCM_CONNECTED, "1.2.3.4:5228",
                 start + 600_000, 2, start, start + 600_000 + 30 * 60_000);
-        assertEquals(SelfCheck.Level.OK, connected.level);
-        assertTrue(connected.text.contains("已持续 30 分钟"));
-        assertTrue(connected.text.contains("断开 2 次"));
+        assertEquals(SelfCheck.Level.INFO, connected.level);
+        assertTrue(connected.text.contains("距首次观察 30 分钟"));
+        assertTrue(connected.hint.contains("不能确认 FCM 协议健康"));
+        assertTrue(connected.text.contains("连接中断或替换 2 次"));
         SelfCheck.Verdict sinceBoot = SelfCheck.fcmConnection(SelfCheck.FCM_CONNECTED, "1.2.3.4:5228",
                 start + 1000, 0, start, start + 3_600_000);
-        assertTrue(sinceBoot.text.contains("开始监测时已连接"));
+        assertTrue(sinceBoot.text.contains("开始监测时已观察到"));
         assertEquals(SelfCheck.Level.WARN, SelfCheck.fcmConnection(SelfCheck.FCM_NONE, null, 0, 0, start, start).level);
         assertEquals(SelfCheck.Level.WARN, SelfCheck.fcmConnection(SelfCheck.FCM_CONNECTING, "x", 0, 0, start, start).level);
         assertEquals(SelfCheck.Level.UNKNOWN, SelfCheck.fcmConnection(SelfCheck.UNKNOWN, null, 0, 0, start, start).level);

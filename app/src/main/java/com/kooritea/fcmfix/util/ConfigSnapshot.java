@@ -9,14 +9,29 @@ import java.util.Set;
 /** One immutable view of one RemotePreferences read; partial updates are never published. */
 public final class ConfigSnapshot {
     public static final String AUTO_ALLOW_FCM = "autoAllowFcm";
+    public static final String REVISION = "configRevision";
+    public static final String EXTRA_SNAPSHOT = "configSnapshot";
+    public final long revision;
+
+    public static ConfigSnapshot newest(ConfigSnapshot current, ConfigSnapshot candidate) {
+        return candidate != null && (current == null || candidate.revision > current.revision) ? candidate : current;
+    }
 
     /** Apps the user ticked by hand. */
     public final Set<String> allowList;
     /** FCM apps the user unticked while auto-allow is on; they stay out of the automatic set. */
     public final Set<String> excludeList;
     public final Map<String, Boolean> options;
+    public final long nightDiagnosticsUntil;
 
     public ConfigSnapshot(Map<String, ?> values) {
+        Object version = values.get(REVISION);
+        if (version != null && (!(version instanceof Long) || (Long) version < 0))
+            throw new IllegalArgumentException("Invalid config revision");
+        revision = version == null ? 0 : (Long) version;
+        Object until = values.get(DiagnosticSession.CONFIG_UNTIL);
+        if (until != null && !(until instanceof Long)) throw new IllegalArgumentException("Invalid diagnostic deadline");
+        nightDiagnosticsUntil = until == null ? 0 : Math.max(0, (Long) until);
         allowList = packageSet(values, "allowList");
         excludeList = packageSet(values, "excludeList");
         Map<String, Boolean> flags = new HashMap<>();

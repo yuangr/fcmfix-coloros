@@ -78,6 +78,7 @@ public class OplusBatteryNetworkFix extends XposedModule {
                     String entry = String.valueOf(uid);
                     if (!whitelist.contains(entry)) {
                         whitelist.add(entry);
+                        OplusHooks.STATUS.recordEffect("Oplus Battery deep-sleep network whitelist", android.os.SystemClock.elapsedRealtime());
                         printLog("Oplus Battery deep-sleep network whitelist: GMS uid=" + uid, true);
                     }
                 }
@@ -198,6 +199,7 @@ public class OplusBatteryNetworkFix extends XposedModule {
                         return;
                     }
                     intent.putExtra(EXTRA_RESTRICT_ENABLE, false);
+                    OplusHooks.STATUS.recordEffect("Oplus Battery Google restrict broadcast", android.os.SystemClock.elapsedRealtime());
                     printLog("Oplus Battery Google restrict broadcast cleared", true);
                 }
             });
@@ -235,6 +237,7 @@ public class OplusBatteryNetworkFix extends XposedModule {
 
                     // Let the original method clear any stale reject-all state in netd.
                     param.args[1] = POLICY_NONE;
+                    OplusHooks.STATUS.recordEffect("Oplus Battery GMS network policy", android.os.SystemClock.elapsedRealtime());
                     printLog("Oplus Battery GMS network reject bypass: uid=" + uid, true);
                 }
             });

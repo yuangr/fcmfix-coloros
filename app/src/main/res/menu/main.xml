@@ -17,4 +17,6 @@
     <item
         android:id="@+id/action_fcm_diagnostics"
         android:title="@string/menu_fcm_diagnostics" />
+    <item android:id="@+id/action_night_diagnostics"
+        android:title="@string/menu_night_diagnostics" />
 </menu>
