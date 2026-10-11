@@ -12,21 +12,33 @@ import java.util.regex.Pattern;
 public final class ReportRedactor {
     private static final Pattern IPV4 = Pattern.compile("(?<![\\w.])(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?![\\w.])");
     private static final Pattern IP_TOKEN = Pattern.compile("[0-9A-Fa-f:.%]+");
-    private final Map<Pattern, String> packages = new LinkedHashMap<>();
+    private final Map<String, String> packages = new LinkedHashMap<>();
+    private final Pattern packageNames;
     public ReportRedactor(List<String> installedPackages, Set<String> keep) {
-        List<String> names = new ArrayList<>(new java.util.TreeSet<>(installedPackages));
+        java.util.TreeSet<String> knownNames = new java.util.TreeSet<>(installedPackages);
+        knownNames.addAll(keep);
+        List<String> names = new ArrayList<>(knownNames);
         names.sort(Comparator.comparingInt(String::length).reversed().thenComparing(Comparator.naturalOrder()));
         int index = 0;
+        List<String> alternatives = new ArrayList<>();
         for (String name : names) {
-            if (keep.contains(name)) continue;
-            packages.put(Pattern.compile("(?<![A-Za-z0-9_])" + Pattern.quote(name) + "(?![A-Za-z0-9_])"),
-                    "[应用" + (++index) + "]");
+            if (name.isEmpty()) continue;
+            alternatives.add(Pattern.quote(name));
+            packages.put(name, keep.contains(name) ? name : "[应用" + (++index) + "]");
         }
+        // Match once, longest name first, including names that must remain readable.
+        // Repeated replacements let short packages such as "android" corrupt a kept
+        // package's interior (com.google.android.gms) and component/action names.
+        packageNames = Pattern.compile(alternatives.isEmpty() ? "(?!)"
+                : "(?<![A-Za-z0-9_])(?:" + String.join("|", alternatives) + ")(?![A-Za-z0-9_])");
     }
     public String redact(String line) {
-        String result = line;
-        for (Map.Entry<Pattern, String> entry : packages.entrySet())
-            result = entry.getKey().matcher(result).replaceAll(java.util.regex.Matcher.quoteReplacement(entry.getValue()));
+        java.util.regex.Matcher names = packageNames.matcher(line);
+        StringBuffer packageOutput = new StringBuffer();
+        while (names.find()) names.appendReplacement(packageOutput,
+                java.util.regex.Matcher.quoteReplacement(packages.get(names.group())));
+        names.appendTail(packageOutput);
+        String result = packageOutput.toString();
         result = IPV4.matcher(result).replaceAll("[IPv4]");
         java.util.regex.Matcher tokens = IP_TOKEN.matcher(result);
         StringBuffer output = new StringBuffer();
