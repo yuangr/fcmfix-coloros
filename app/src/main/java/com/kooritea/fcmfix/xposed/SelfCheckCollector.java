@@ -48,6 +48,8 @@ final class SelfCheckCollector {
         out.putBoolean(SelfCheck.KEY_CONFIG_LOADED, config != null);
         out.putInt(SelfCheck.KEY_FCM_PACKAGES, FcmPackages.size());
         if (config != null) {
+            out.putLong(SelfCheck.KEY_CONFIG_REVISION, config.revision);
+            out.putLong(SelfCheck.KEY_DIAGNOSTIC_UNTIL, config.nightDiagnosticsUntil);
             out.putInt(SelfCheck.KEY_MANUAL_COUNT, config.allowList.size());
             out.putBoolean(SelfCheck.KEY_AUTO_ALLOW, config.autoAllowFcm());
         }

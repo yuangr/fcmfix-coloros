@@ -186,6 +186,9 @@ final class CheckReport {
             if (lines == null) text.append("未响应：模块未在该进程加载\n");
             else for (String line : lines) text.append(line).append('\n');
         }
+        text.append("\n== 夜间私有日志（认证系统框架查询，每文件仅末尾32KB；不是完整日志）\n")
+                .append(logs.getString(SelfCheck.KEY_NIGHT_EXPORT,
+                        "系统框架未返回日志；升级后请重启。ADB Root 可能受系统文件权限限制。\n"));
         return text.toString();
     }
 
@@ -331,12 +334,15 @@ final class CheckReport {
 
     private void addConfigRows(XposedService service, Bundle status) {
         int localManual = -1;
+        long localRevision = -1, localUntil = 0;
         boolean localAuto = false;
         try {
             SharedPreferences pref = service == null ? null : service.getRemotePreferences("config");
             if (pref != null) {
                 localManual = pref.getStringSet("allowList", Collections.emptySet()).size();
                 localAuto = pref.getBoolean(ConfigSnapshot.AUTO_ALLOW_FCM, false);
+                localRevision = pref.getLong(ConfigSnapshot.REVISION, 0);
+                localUntil = pref.getLong(com.kooritea.fcmfix.util.DiagnosticSession.CONFIG_UNTIL, 0);
             }
         } catch (Throwable e) {
             Log.w("CheckReport", e.toString());
@@ -346,6 +352,8 @@ final class CheckReport {
         if (localManual >= 0) {
             add("配置同步", SelfCheck.configSync(remoteLoaded, status.getInt(SelfCheck.KEY_MANUAL_COUNT),
                     remoteAuto, localManual, localAuto));
+            add("配置版本同步", SelfCheck.configRevision(status.getLong(SelfCheck.KEY_CONFIG_REVISION, -1),
+                    localRevision, status.getLong(SelfCheck.KEY_DIAGNOSTIC_UNTIL, 0), localUntil));
         }
         if (remoteAuto) {
             int fcm = status.getInt(SelfCheck.KEY_FCM_PACKAGES, SelfCheck.UNKNOWN);

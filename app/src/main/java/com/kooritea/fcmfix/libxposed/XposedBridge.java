@@ -50,7 +50,7 @@ public final class XposedBridge {
 
     /** This process's recent module log lines, oldest first. */
     public static ArrayList<String> recentLogs() {
-        return RECENT.snapshot();
+        return RECENT.snapshot(32768);
     }
 
     public static SharedPreferences getRemotePreferences(String group) {

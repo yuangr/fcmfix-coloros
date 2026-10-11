@@ -21,6 +21,30 @@ public final class BoundedJournal {
         current = new File(directory, "night-current.log");
         previous = new File(directory, "night-previous.log");
     }
+    /** Read only, bounded report appendix. Called as the journal owner on a background thread. */
+    public static String exportTail(File directory, int byteLimitPerFile) {
+        if (byteLimitPerFile <= 0 || byteLimitPerFile > 65536) throw new IllegalArgumentException("export budget");
+        StringBuilder text = new StringBuilder();
+        for (String name : new String[]{"night-previous.log", "night-current.log"}) {
+            File file = new File(directory, name);
+            if (!file.isFile()) continue;
+            text.append("\n== ").append(name).append(" （每文件仅末尾最多 ")
+                    .append(byteLimitPerFile).append(" 字节；不是完整夜间日志） ==\n");
+            try (java.io.RandomAccessFile in = new java.io.RandomAccessFile(file, "r")) {
+                long length = in.length();
+                long start = Math.max(0, length - byteLimitPerFile);
+                in.seek(start);
+                byte[] bytes = new byte[(int) Math.min(length, byteLimitPerFile)];
+                in.readFully(bytes);
+                if (start > 0) text.append("[前部已截断；首行可能不完整]\n");
+                text.append(new String(bytes, StandardCharsets.UTF_8)).append('\n');
+            } catch (IOException e) {
+                text.append("读取失败：").append(e.getClass().getSimpleName()).append('\n');
+            }
+        }
+        return text.length() == 0 ? "尚无夜间日志\n" : text.toString();
+    }
+
     public synchronized void append(String text) throws IOException {
         String line = String.valueOf(text).replace("\r", "\\r").replace("\n", "\\n");
         if (line.length() > 1024) line = line.substring(0, 1024) + "…[truncated]";

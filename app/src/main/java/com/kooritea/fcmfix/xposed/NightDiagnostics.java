@@ -54,6 +54,10 @@ final class NightDiagnostics {
             });
         } catch (RejectedExecutionException e) { DROPPED.incrementAndGet(); }
     }
+    static String exportTail() {
+        return BoundedJournal.exportTail(new File(android.os.Environment.getDataDirectory(),
+                "system/fcmfix-coloros"), 32768);
+    }
     static boolean hasError() { return writeError != null || DROPPED.get() > 0; }
     static String status() {
         long remaining = SESSION.remaining(SystemClock.elapsedRealtime());

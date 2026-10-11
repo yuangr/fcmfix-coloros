@@ -5,6 +5,31 @@ import java.util.*;
 import static org.junit.Assert.*;
 
 public class ConfigSnapshotTest {
+    @Test public void authenticatedNewerSnapshotBeatsStaleFrameworkCache() {
+        ConfigSnapshot cache = new ConfigSnapshot(Map.of(ConfigSnapshot.REVISION, 1L, DiagnosticSession.CONFIG_UNTIL, 9000L));
+        ConfigSnapshot stop = new ConfigSnapshot(Map.of(ConfigSnapshot.REVISION, 2L, DiagnosticSession.CONFIG_UNTIL, 0L));
+        assertSame(stop, ConfigSnapshot.newest(cache, stop));
+        assertSame(stop, ConfigSnapshot.newest(stop, cache));
+        assertEquals(0, ConfigSnapshot.newest(stop, cache).nightDiagnosticsUntil);
+    }
+    @Test public void duplicateOrOutOfOrderSnapshotsCannotUndoLatestSettings() {
+        ConfigSnapshot latest = new ConfigSnapshot(Map.of(ConfigSnapshot.REVISION, 5L, "autoAllowFcm", true));
+        ConfigSnapshot replay = new ConfigSnapshot(Map.of(ConfigSnapshot.REVISION, 5L, "autoAllowFcm", false));
+        assertSame(latest, ConfigSnapshot.newest(latest, replay));
+        assertSame(latest, ConfigSnapshot.newest(latest, null));
+        assertSame(latest, ConfigSnapshot.newest(null, latest));
+    }
+    @Test public void versionedSnapshotSupersedesLegacyBootConfiguration() {
+        ConfigSnapshot legacy = new ConfigSnapshot(Map.of());
+        ConfigSnapshot current = new ConfigSnapshot(Map.of(ConfigSnapshot.REVISION, 1L));
+        assertEquals(0, legacy.revision);
+        assertSame(current, ConfigSnapshot.newest(legacy, current));
+    }
+    @Test public void invalidConfigRevisionIsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> new ConfigSnapshot(Map.of(ConfigSnapshot.REVISION, -1L)));
+        assertThrows(IllegalArgumentException.class, () -> new ConfigSnapshot(Map.of(ConfigSnapshot.REVISION, "2")));
+    }
+
     @org.junit.Test public void diagnosticDeadlineDefaultsOffAndRequiresLong() {
         assertEquals(0, new ConfigSnapshot(java.util.Map.of()).nightDiagnosticsUntil);
         assertEquals(5000, new ConfigSnapshot(java.util.Map.of(DiagnosticSession.CONFIG_UNTIL, 5000L)).nightDiagnosticsUntil);

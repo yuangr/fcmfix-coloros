@@ -4,6 +4,15 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class SelfCheckTest {
+    @org.junit.Test public void configRevisionExposesStaleFrameworkAndDeadlineMismatch() {
+        assertEquals(SelfCheck.Level.WARN, SelfCheck.configRevision(1, 2, 5000, 0).level);
+        assertEquals(SelfCheck.Level.WARN, SelfCheck.configRevision(2, 2, 5000, 0).level);
+        assertEquals(SelfCheck.Level.OK, SelfCheck.configRevision(2, 2, 0, 0).level);
+    }
+    @org.junit.Test public void oldFrameworkWithoutRevisionRequiresReboot() {
+        assertEquals(SelfCheck.Level.WARN, SelfCheck.configRevision(-1, 0, 0, 0).level);
+    }
+
     @Test public void gmsPolicyNamesEachRestriction() {
         assertEquals(SelfCheck.Level.OK, SelfCheck.gmsPolicy(0).level);
         assertEquals(SelfCheck.Level.UNKNOWN, SelfCheck.gmsPolicy(SelfCheck.UNKNOWN).level);

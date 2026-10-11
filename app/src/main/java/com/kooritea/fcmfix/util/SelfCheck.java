@@ -8,6 +8,8 @@ public final class SelfCheck {
     public static final String EXTRA_CHECK = "selfCheck";
 
     public static final String KEY_CONFIG_LOADED = "check.configLoaded";
+    public static final String KEY_CONFIG_REVISION = "check.configRevision";
+    public static final String KEY_DIAGNOSTIC_UNTIL = "check.diagnosticUntil";
     public static final String KEY_MANUAL_COUNT = "check.manualCount";
     public static final String KEY_AUTO_ALLOW = "check.autoAllow";
     /** Installed FCM apps system_server knows of, or UNKNOWN when it has not scanned. */
@@ -28,6 +30,7 @@ public final class SelfCheck {
     public static final String KEY_FCM_SAMPLE_GAP = "check.fcmSampleGap";
     public static final String KEY_FCM_ELAPSED_TIME = "check.fcmElapsedTime";
     public static final String KEY_NIGHT_DIAGNOSTICS = "check.nightDiagnostics";
+    public static final String KEY_NIGHT_EXPORT = "check.nightExport";
     /** Timeline lines, oldest first: screen, deep Doze, network, FCM connection, pushes. */
     public static final String KEY_EVENTS = "check.events";
     public static final int FCM_NONE = 0;
@@ -112,6 +115,14 @@ public final class SelfCheck {
                     "Android 14 以下修改配置后需要重启；其他情况请重新打开 FCMFix 再查一次");
         }
         return new Verdict(Level.OK, "已同步", null);
+    }
+
+    public static Verdict configRevision(long remote, long local, long remoteUntil, long localUntil) {
+        if (remote < 0) return new Verdict(Level.WARN, "系统框架未报告配置版本", "升级后请重启手机");
+        if (remote != local || remoteUntil != localUntil)
+            return new Verdict(Level.WARN, "应用版本 " + local + "，系统框架版本 " + remote + "；配置尚未同步",
+                    "请稍后重新自查；未同步时诊断开关与后台保护仍可能使用旧配置");
+        return new Verdict(Level.OK, "应用/系统框架配置版本 " + local + "；诊断截止时间一致", null);
     }
 
     public static Verdict appNotify(int notify, int blockedChannels) {

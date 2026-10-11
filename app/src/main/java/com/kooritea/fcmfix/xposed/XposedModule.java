@@ -42,6 +42,32 @@ public abstract class XposedModule {
     static final String TAG = "FcmFix";
     private static volatile ConfigSnapshot config;
     private static boolean reloadRequested;
+    private static ConfigSnapshot pendingTrustedConfig;
+
+    private static synchronized void onTrustedConfig(ConfigSnapshot incoming) {
+        pendingTrustedConfig = ConfigSnapshot.newest(pendingTrustedConfig, incoming);
+        onUpdateConfig();
+    }
+
+    private static ConfigSnapshot readTrustedSnapshot(Intent intent) {
+        Bundle payload = intent.getBundleExtra(ConfigSnapshot.EXTRA_SNAPSHOT);
+        if (payload == null) return null;
+        java.util.Map<String, Object> values = new java.util.HashMap<>();
+        for (String key : new String[]{ConfigSnapshot.REVISION, ConfigSnapshot.AUTO_ALLOW_FCM,
+                com.kooritea.fcmfix.util.DiagnosticSession.CONFIG_UNTIL,
+                "disableAutoCleanNotification", "includeIceBoxDisableApp"}) {
+            if (!payload.containsKey(key)) throw new IllegalArgumentException("Missing config field: " + key);
+            values.put(key, payload.get(key));
+        }
+        for (String key : new String[]{"allowList", "excludeList"}) {
+            java.util.ArrayList<String> names = payload.getStringArrayList(key);
+            if (names == null) throw new IllegalArgumentException("Missing package list: " + key);
+            values.put(key, new java.util.HashSet<>(names));
+        }
+        ConfigSnapshot snapshot = new ConfigSnapshot(values);
+        if (snapshot.revision == 0) throw new IllegalArgumentException("Unversioned config broadcast");
+        return snapshot;
+    }
     private static final com.kooritea.fcmfix.util.RemoteConfigSubscription CONFIG_SUBSCRIPTION =
             new com.kooritea.fcmfix.util.RemoteConfigSubscription(XposedModule::onUpdateConfig);
 
@@ -179,18 +205,27 @@ public abstract class XposedModule {
         if (loadConfigThread != null) return;
         loadConfigThread = new Thread(() -> {
             while (true) {
+                ConfigSnapshot trusted;
                 synchronized (XposedModule.class) {
                     if (!reloadRequested) {
                         loadConfigThread = null;
                         return;
                     }
                     reloadRequested = false;
+                    trusted = pendingTrustedConfig;
+                    pendingTrustedConfig = null;
                 }
                 try {
-                    SharedPreferences preferences = XposedBridge.getRemotePreferences("config");
-                    if (preferences == null) throw new IllegalStateException("RemotePreferences unavailable");
-                    CONFIG_SUBSCRIPTION.bind(preferences);
-                    ConfigSnapshot loaded = new ConfigSnapshot(preferences.getAll());
+                    ConfigSnapshot loaded = ConfigSnapshot.newest(config, trusted);
+                    try {
+                        SharedPreferences preferences = XposedBridge.getRemotePreferences("config");
+                        if (preferences == null) throw new IllegalStateException("RemotePreferences unavailable");
+                        CONFIG_SUBSCRIPTION.bind(preferences);
+                        loaded = ConfigSnapshot.newest(loaded, new ConfigSnapshot(preferences.getAll()));
+                    } catch (Throwable e) {
+                        printLog("Remote config cache read failed: " + e.getMessage());
+                    }
+                    if (loaded == null) throw new IllegalStateException("No valid config snapshot");
                     config = loaded;
                     if ("android".equals(getSelfPackageName())) NightDiagnostics.configure(loaded.nightDiagnosticsUntil);
                     if (loaded.autoAllowFcm() && "android".equals(getSelfPackageName())) {
@@ -226,11 +261,18 @@ public abstract class XposedModule {
                     public void onReceive(Context context, Intent intent) {
                         String action = intent.getAction();
                         if (ACTION_UPDATE_CONFIG.equals(action) && isConfigSender(this)) {
-                            onUpdateConfig();
+                            try {
+                                ConfigSnapshot incoming = readTrustedSnapshot(intent);
+                                if (incoming == null) onUpdateConfig();
+                                else onTrustedConfig(incoming);
+                            } catch (RuntimeException e) {
+                                printLog("Rejected invalid authenticated config: " + e.getMessage());
+                            }
                         } else if (ACTION_QUERY_STATUS.equals(action) && isOrderedBroadcast() && isConfigSender(this)) {
-                            if (intent.getBooleanExtra(SelfCheck.EXTRA_CHECK, false)
-                                    && "android".equals(getSelfPackageName())) {
-                                answerSelfCheck(goAsync());
+                            boolean logs = intent.getBooleanExtra(HookStatus.EXTRA_LOGS, false);
+                            if ("android".equals(getSelfPackageName())
+                                    && (intent.getBooleanExtra(SelfCheck.EXTRA_CHECK, false) || logs)) {
+                                answerSelfCheck(goAsync(), logs);
                             } else {
                                 setResultExtras(addHookStatus(getResultExtras(true),
                                         intent.getBooleanExtra(HookStatus.EXTRA_LOGS, false)));
@@ -300,12 +342,13 @@ public abstract class XposedModule {
     }
 
     /** Self-check reads other services over Binder; keep it off system_server's main thread. */
-    private static void answerSelfCheck(BroadcastReceiver.PendingResult pending) {
+    private static void answerSelfCheck(BroadcastReceiver.PendingResult pending, boolean logs) {
         new Thread(() -> {
             try {
-                Bundle extras = addHookStatus(pending.getResultExtras(true), false);
+                Bundle extras = addHookStatus(pending.getResultExtras(true), logs);
                 try {
-                    SelfCheckCollector.collect(context, config, extras);
+                    if (logs) extras.putString(SelfCheck.KEY_NIGHT_EXPORT, NightDiagnostics.exportTail());
+                    else SelfCheckCollector.collect(context, config, extras);
                 } catch (Throwable e) {
                     printLog("Self-check failed: " + e);
                 }
