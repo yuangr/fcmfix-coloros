@@ -145,6 +145,8 @@ public class MainActivity extends AppCompatActivity {
             this.excludeList.clear();
             this.excludeList.addAll(pref.getStringSet("excludeList", new HashSet<>()));
             this.config.put(ConfigSnapshot.AUTO_ALLOW_FCM, pref.getBoolean(ConfigSnapshot.AUTO_ALLOW_FCM, false));
+            this.config.put(com.kooritea.fcmfix.util.DiagnosticSession.CONFIG_UNTIL,
+                    pref.getLong(com.kooritea.fcmfix.util.DiagnosticSession.CONFIG_UNTIL, 0));
             this.configLoaded = true;
             if (appListAdapter != null) {
                 appListAdapter.syncAllowList();
@@ -380,7 +382,7 @@ public class MainActivity extends AppCompatActivity {
             holder.isAllow.setChecked(appInfo.isAllow);
             holder.isAllow.setEnabled(configLoaded);
             if (appInfo.isAllow && appInfo.lastPush > 0) {
-                String text = DateUtils.getRelativeTimeSpanString(appInfo.lastPush) + "收到推送";
+                String text = DateUtils.getRelativeTimeSpanString(appInfo.lastPush) + "观察到投递请求";
                 holder.lastPush.setText(text);
                 holder.lastPush.setVisibility(View.VISIBLE);
             } else {
@@ -574,6 +576,8 @@ public class MainActivity extends AppCompatActivity {
                     .putStringSet("allowList", new HashSet<>(this.allowList))
                     .putStringSet("excludeList", new HashSet<>(this.excludeList))
                     .putBoolean(ConfigSnapshot.AUTO_ALLOW_FCM, autoAllowFcm())
+                    .putLong(com.kooritea.fcmfix.util.DiagnosticSession.CONFIG_UNTIL,
+                            config.optLong(com.kooritea.fcmfix.util.DiagnosticSession.CONFIG_UNTIL, 0))
                     .putBoolean("disableAutoCleanNotification", this.config.getBoolean("disableAutoCleanNotification"))
                     .putBoolean("includeIceBoxDisableApp", this.config.getBoolean("includeIceBoxDisableApp"))
                     // Left behind by the removed no-response notification option.
@@ -610,6 +614,9 @@ public class MainActivity extends AppCompatActivity {
                 .setChecked(config.optBoolean("disableAutoCleanNotification", false));
         menu.findItem(R.id.action_icebox).setEnabled(configLoaded)
                 .setChecked(config.optBoolean("includeIceBoxDisableApp", false));
+        menu.findItem(R.id.action_night_diagnostics).setEnabled(configLoaded)
+                .setTitle(config.optLong(com.kooritea.fcmfix.util.DiagnosticSession.CONFIG_UNTIL, 0) > System.currentTimeMillis()
+                        ? R.string.menu_stop_night_diagnostics : R.string.menu_night_diagnostics);
         // Auto-allow already covers every FCM app.
         menu.findItem(R.id.action_select_all_fcm).setEnabled(configLoaded && appListAdapter != null)
                 .setVisible(!autoAllowFcm());
@@ -627,6 +634,18 @@ public class MainActivity extends AppCompatActivity {
             toggleOption("includeIceBoxDisableApp", !item.isChecked());
         } else if (id == R.id.action_select_all_fcm) {
             selectAllFcmApps();
+        } else if (id == R.id.action_night_diagnostics) {
+            String key = com.kooritea.fcmfix.util.DiagnosticSession.CONFIG_UNTIL;
+            long previous = config.optLong(key, 0);
+            long until = previous > System.currentTimeMillis() ? 0 : System.currentTimeMillis()
+                    + com.kooritea.fcmfix.util.DiagnosticSession.MAX_DURATION_MS;
+            try {
+                config.put(key, until);
+                if (!updateConfig()) config.put(key, previous);
+                else android.widget.Toast.makeText(this, until == 0 ? "诊断已停止；现有日志仍可导出"
+                        : "12小时诊断已开启，可在自查中查看写入状态", android.widget.Toast.LENGTH_LONG).show();
+            } catch (JSONException e) { Log.e("nightDiagnostics", e.toString()); }
+            invalidateOptionsMenu();
         } else if (id == R.id.action_fcm_diagnostics) {
             CheckReport.openFcmDiagnostics(this);
         } else {

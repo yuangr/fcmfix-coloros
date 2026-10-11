@@ -5,6 +5,15 @@ import java.util.*;
 import static org.junit.Assert.*;
 
 public class ConfigSnapshotTest {
+    @org.junit.Test public void diagnosticDeadlineDefaultsOffAndRequiresLong() {
+        assertEquals(0, new ConfigSnapshot(java.util.Map.of()).nightDiagnosticsUntil);
+        assertEquals(5000, new ConfigSnapshot(java.util.Map.of(DiagnosticSession.CONFIG_UNTIL, 5000L)).nightDiagnosticsUntil);
+        try {
+            new ConfigSnapshot(java.util.Map.of(DiagnosticSession.CONFIG_UNTIL, "forever"));
+            fail("invalid deadline must be rejected");
+        } catch (IllegalArgumentException expected) { }
+    }
+
     @Test public void missingOptionsUseSafeDefaults() {
         ConfigSnapshot snapshot = new ConfigSnapshot(Collections.emptyMap());
         assertTrue(snapshot.allowList.isEmpty());

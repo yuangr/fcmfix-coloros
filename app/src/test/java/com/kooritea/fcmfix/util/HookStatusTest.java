@@ -22,6 +22,35 @@ public class HookStatusTest {
         assertTrue(status.failed().isEmpty());
     }
 
+    @Test public void callbacksAndActionsDoNotCertifyFinalDelivery() {
+        HookStatus status = new HookStatus();
+        status.recordActive("a");
+        status.recordCallback("a");
+        assertTrue(status.runtime(100).get(0).contains("保护分支待验证"));
+        status.recordEffect("a", 100);
+        assertTrue(status.runtime(5100).get(0).contains("5 秒前"));
+        assertEquals(0, status.runtimeErrors());
+    }
+    @Test public void runtimeFailureSurvivesLaterSuccessfulCallsAndUnavailableClearsOnAction() {
+        HookStatus status = new HookStatus();
+        status.recordActive("a");
+        status.recordRuntimeFailure("a", new IllegalArgumentException("bad signature"));
+        status.recordEffect("a", 100);
+        assertEquals(1, status.runtimeErrors());
+        assertTrue(status.runtime(100).get(0).contains("bad signature"));
+        status.recordActive("b");
+        status.recordUnavailable("b", "instance missing");
+        assertEquals(2, status.runtimeErrors());
+        status.recordEffect("b", 100);
+        assertEquals(1, status.runtimeErrors());
+    }
+    @Test public void unsolicitedNamesCannotGrowRuntimeState() {
+        HookStatus status = new HookStatus();
+        for (int i = 0; i < 1000; i++) status.recordRuntimeFailure("unknown" + i, null);
+        assertTrue(status.runtime(0).isEmpty());
+        assertEquals(0, status.runtimeErrors());
+    }
+
     @Test public void missingReasonIsStillAFailure() {
         HookStatus status = new HookStatus();
         status.recordFailed("a", null);

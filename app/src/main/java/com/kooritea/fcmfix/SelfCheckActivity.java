@@ -23,6 +23,8 @@ import androidx.core.content.FileProvider;
 
 import com.kooritea.fcmfix.util.HookStatus;
 import com.kooritea.fcmfix.util.SelfCheck;
+import com.kooritea.fcmfix.util.ReportExportResult;
+import com.kooritea.fcmfix.util.ReportRedactor;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -47,6 +49,8 @@ public class SelfCheckActivity extends AppCompatActivity {
     private Bundle result;
     private List<CheckReport.Row> rows = new ArrayList<>();
     private File lastReport;
+    private String reportOutcome = "完整报告";
+    private boolean redactReport = true;
 
     private final ActivityResultLauncher<String> saveReport = registerForActivityResult(
             new ActivityResultContracts.CreateDocument("text/plain"), this::saveReportTo);
@@ -121,6 +125,14 @@ public class SelfCheckActivity extends AppCompatActivity {
 
     /** The report can include one app's notification state and logs; offer the allowed apps. */
     private void chooseReportApp() {
+        new AlertDialog.Builder(this).setTitle("导出报告")
+                .setItems(new String[]{"隐藏非目标应用包名和IP（推荐）", "保留原始内容"}, (dialog, which) -> {
+                    redactReport = which == 0;
+                    chooseReportTarget();
+                }).setNegativeButton("取消", null).show();
+    }
+
+    private void chooseReportTarget() {
         ArrayList<String> apps = result == null ? null : result.getStringArrayList(SelfCheck.KEY_APPS);
         if (apps == null || apps.isEmpty()) {
             exportReport(null);
@@ -150,6 +162,7 @@ public class SelfCheckActivity extends AppCompatActivity {
     }
 
     private void runReport(String packageName, AlertDialog progress, String appendix) {
+        final boolean redact = redactReport;
         new Thread(() -> {
             String error = null;
             File report = null;
@@ -178,18 +191,33 @@ public class SelfCheckActivity extends AppCompatActivity {
                     }
                 }, "FCMFix-report-reader");
                 reader.start();
-                if (!process.waitFor(120, TimeUnit.SECONDS)) process.destroyForcibly();
+                boolean timedOut = !process.waitFor(120, TimeUnit.SECONDS);
+                if (timedOut) {
+                    process.destroyForcibly();
+                    process.getInputStream().close();
+                }
                 reader.join(5000);
+                if (reader.isAlive()) {
+                    process.getInputStream().close();
+                    reader.join(1000);
+                }
+                if (reader.isAlive()) throw new IOException("报告读取线程未结束，请重新导出");
+                int exitCode = process.isAlive() ? -1 : process.exitValue();
                 String head = readHead(report);
-                if (!head.startsWith("FCMFix report")) {
+                ReportExportResult.Status exportStatus = ReportExportResult.assess(timedOut, exitCode,
+                        true, head, readTail(report));
+                if (exportStatus == ReportExportResult.Status.FAILED) {
                     error = head.trim().isEmpty() ? "没有获得 Root 权限" : head.trim();
                 } else {
+                    reportOutcome = exportStatus == ReportExportResult.Status.COMPLETE ? "完整报告"
+                            : timedOut ? "部分报告：采集超时" : "部分报告：采集异常或缺少完成标记";
                     try (OutputStream out = new FileOutputStream(report, true)) {
-                        out.write(appendix.getBytes(StandardCharsets.UTF_8));
+                        out.write(("\n== 导出状态 ==\n" + reportOutcome + "\n" + appendix).getBytes(StandardCharsets.UTF_8));
                     }
+                    if (redact) redactFile(report, packageName);
                 }
             } catch (IOException e) {
-                error = "无法执行 su：" + e.getMessage();
+                error = "报告采集或写入失败：" + e.getMessage();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 error = "已中断";
@@ -213,11 +241,39 @@ public class SelfCheckActivity extends AppCompatActivity {
         }, "FCMFix-report").start();
     }
 
+    private void redactFile(File report, String targetPackage) throws IOException {
+        List<String> installed = new ArrayList<>();
+        for (android.content.pm.PackageInfo pkg : getPackageManager().getInstalledPackages(0)) installed.add(pkg.packageName);
+        java.util.Set<String> keep = new java.util.HashSet<>(java.util.Arrays.asList(getPackageName(),
+                "com.google.android.gms", "com.google.android.gsf", "com.android.vending"));
+        if (targetPackage != null) keep.add(targetPackage);
+        ReportRedactor redactor = new ReportRedactor(installed, keep);
+        File temp = new File(report.getParentFile(), report.getName() + ".tmp");
+        try (java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(
+                new FileInputStream(report), StandardCharsets.UTF_8));
+             java.io.BufferedWriter out = new java.io.BufferedWriter(new java.io.OutputStreamWriter(
+                     new FileOutputStream(temp), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = in.readLine()) != null) { out.write(redactor.redact(line)); out.newLine(); }
+        }
+        java.nio.file.Files.move(temp.toPath(), report.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private static String readTail(File report) throws IOException {
+        try (java.io.RandomAccessFile in = new java.io.RandomAccessFile(report, "r")) {
+            in.seek(Math.max(0, in.length() - 4096));
+            byte[] tail = new byte[(int) Math.min(4096, in.length())];
+            in.readFully(tail);
+            return new String(tail, StandardCharsets.UTF_8);
+        }
+    }
+
     private void showReportActions(File report) {
         String size = Math.max(1, report.length() / 1024) + " KB";
         new AlertDialog.Builder(this)
-                .setTitle("报告已生成")
-                .setMessage("报告大小 " + size + "。报告包含已安装应用的包名，公开发布前可以自行打码。")
+                .setTitle(reportOutcome + "已生成")
+                .setMessage("报告大小 " + size + "。" + (redactReport ? "已处理已知非目标包名和IP；其他日志内容仍建议检查。"
+                        : "原始报告包含包名和连接地址，分享前请检查内容。"))
                 .setPositiveButton("分享", (dialog, which) -> shareReport(report))
                 .setNeutralButton("保存到文件", (dialog, which) -> saveReport.launch(report.getName()))
                 .setNegativeButton("关闭", null)

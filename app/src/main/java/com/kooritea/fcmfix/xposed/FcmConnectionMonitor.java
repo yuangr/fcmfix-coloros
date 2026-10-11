@@ -34,6 +34,7 @@ import java.util.List;
  */
 final class FcmConnectionMonitor {
     private static final long SAMPLE_INTERVAL_MS = 60_000;
+    private static final Runnable SOON_SAMPLE = FcmConnectionMonitor::sample;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("MM-dd HH:mm:ss");
     private static final LogRing EVENTS = new LogRing(120);
 
@@ -49,6 +50,8 @@ final class FcmConnectionMonitor {
     private static long lastSeenMillis;
     private static int drops;
     private static long startedAt;
+    private static long lastSample = -1;
+    private static long maxSampleGap;
 
     private FcmConnectionMonitor() {
     }
@@ -64,7 +67,7 @@ final class FcmConnectionMonitor {
         HandlerThread thread = new HandlerThread("FCMFix-monitor");
         thread.start();
         handler = new Handler(thread.getLooper());
-        startedAt = System.currentTimeMillis();
+        startedAt = android.os.SystemClock.elapsedRealtime();
 
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_SCREEN_ON);
@@ -91,7 +94,9 @@ final class FcmConnectionMonitor {
 
                 @Override
                 public void onCapabilitiesChanged(Network network, NetworkCapabilities capabilities) {
-                    String name = networkName(capabilities);
+                    String name = networkName(capabilities) + " #" + network
+                            + (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ? " 已验证" : " 未验证")
+                            + (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL) ? " 需认证" : "");
                     if (!name.equals(last)) {
                         last = name;
                         event("网络：" + name);
@@ -103,6 +108,7 @@ final class FcmConnectionMonitor {
                 public void onLost(Network network) {
                     last = null;
                     event("网络断开");
+                    sampleSoon();
                 }
             }, handler);
         } catch (Throwable e) {
@@ -131,7 +137,10 @@ final class FcmConnectionMonitor {
 
     private static void sampleSoon() {
         Handler current = handler;
-        if (current != null) current.postDelayed(FcmConnectionMonitor::sample, 3000);
+        if (current != null) {
+            current.removeCallbacks(SOON_SAMPLE);
+            current.postDelayed(SOON_SAMPLE, 3000);
+        }
     }
 
     private static void sampleAndReschedule() {
@@ -142,11 +151,19 @@ final class FcmConnectionMonitor {
     /** Takes a fresh sample; also called from the self-check thread. */
     static synchronized void sample() {
         if (gmsUid < 0) return;
+        long sampleTime = android.os.SystemClock.elapsedRealtime();
+        if (lastSample >= 0) {
+            long gap = Math.max(0, sampleTime - lastSample);
+            maxSampleGap = Math.max(maxSampleGap, gap);
+            if (gap > 120_000) event("采样空档 " + SelfCheck.duration(gap) + "（期间连接状态未知）");
+        }
+        lastSample = sampleTime;
         List<InetDiag.Socket> sockets;
         try {
             sockets = dumpTcp();
         } catch (Throwable e) {
             XposedModule.logOnce("FCM monitor: sock_diag failed: " + e);
+            if (state != SelfCheck.UNKNOWN) event("连接采样失败；状态未知");
             state = SelfCheck.UNKNOWN;
             return;
         }
@@ -159,18 +176,18 @@ final class FcmConnectionMonitor {
                     && (established == null || socket.key().equals(connectionKey))) established = socket;
             else if (socket.state == InetDiag.TCP_SYN_SENT && connecting == null) connecting = socket;
         }
-        long now = System.currentTimeMillis();
+        long now = sampleTime;
         String key = established == null ? null : established.key();
         if (connectionKey != null && !connectionKey.equals(key)) {
             drops++;
             // The drop happened somewhere between the last sample that saw it and now.
-            event("FCM 连接断开（" + lastSeen.format(TIME) + " 时还在线，此前已连接 "
+            event("GMS 候选连接中断或替换（" + lastSeen.format(TIME) + " 时仍看到TCP，首末观察间隔 "
                     + SelfCheck.duration(lastSeenMillis - since) + "）");
         }
         if (key != null && !key.equals(connectionKey)) {
             since = now;
             remote = established.remote.getHostAddress() + ":" + established.remotePort;
-            event("FCM 已连接 " + remote);
+            event("GMS 候选 TCP 已建立 " + remote);
         }
         connectionKey = key;
         if (established != null) {
@@ -192,7 +209,7 @@ final class FcmConnectionMonitor {
         return remote;
     }
 
-    /** Wall time the current connection was first seen; 0 when not connected. */
+    /** Monotonic first-seen time; 0 when not connected. */
     static synchronized long since() {
         return state == SelfCheck.FCM_CONNECTED ? since : 0;
     }
@@ -204,6 +221,8 @@ final class FcmConnectionMonitor {
     static synchronized long startedAt() {
         return startedAt;
     }
+
+    static synchronized long maxSampleGap() { return maxSampleGap; }
 
     private static List<InetDiag.Socket> dumpTcp() throws Exception {
         List<InetDiag.Socket> sockets = new ArrayList<>();

@@ -189,6 +189,7 @@ public abstract class XposedModule {
                     if (preferences == null) throw new IllegalStateException("RemotePreferences unavailable");
                     ConfigSnapshot loaded = new ConfigSnapshot(preferences.getAll());
                     config = loaded;
+                    if ("android".equals(getSelfPackageName())) NightDiagnostics.configure(loaded.nightDiagnosticsUntil);
                     if (loaded.autoAllowFcm() && "android".equals(getSelfPackageName())) {
                         FcmPackages.ensureScanned(context);
                     }
@@ -282,10 +283,13 @@ public abstract class XposedModule {
 
     private static Bundle addHookStatus(Bundle result, boolean logs) {
         String process = getSelfPackageName();
+        result.putInt(process + HookStatus.VERSION_SUFFIX, com.kooritea.fcmfix.BuildConfig.VERSION_CODE);
         if (logs) result.putStringArrayList(process + HookStatus.LOGS_SUFFIX, XposedBridge.recentLogs());
         result.putStringArrayList(process + HookStatus.ACTIVE_SUFFIX, OplusHooks.STATUS.active());
         result.putStringArrayList(process + HookStatus.FAILED_SUFFIX, OplusHooks.STATUS.failed());
         result.putStringArrayList(process + HookStatus.SKIPPED_SUFFIX, OplusHooks.STATUS.skipped());
+        result.putStringArrayList(process + HookStatus.RUNTIME_SUFFIX, OplusHooks.STATUS.runtime(SystemClock.elapsedRealtime()));
+        result.putInt(process + HookStatus.RUNTIME_ERRORS_SUFFIX, OplusHooks.STATUS.runtimeErrors());
         if ("android".equals(process)) {
             result.putBoolean(HookStatus.KEY_IGNORE_GMS_USER_SET, OplusBatteryNetworkFix.batteryIgnoresGmsUserSet());
         }

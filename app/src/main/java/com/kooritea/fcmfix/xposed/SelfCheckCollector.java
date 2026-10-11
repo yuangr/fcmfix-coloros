@@ -39,9 +39,9 @@ final class SelfCheckCollector {
     private SelfCheckCollector() {
     }
 
-    static void recordPush(String packageName) {
+    static void recordPushRequest(String packageName) {
         PUSHES.record(packageName, System.currentTimeMillis());
-        FcmConnectionMonitor.event("推送 → " + packageName);
+        FcmConnectionMonitor.event("可信投递请求 → " + packageName);
     }
 
     static void collect(Context context, ConfigSnapshot config, Bundle out) {
@@ -64,6 +64,10 @@ final class SelfCheckCollector {
         out.putLong(SelfCheck.KEY_FCM_SINCE, FcmConnectionMonitor.since());
         out.putInt(SelfCheck.KEY_FCM_DROPS, FcmConnectionMonitor.drops());
         out.putLong(SelfCheck.KEY_FCM_MONITOR_START, FcmConnectionMonitor.startedAt());
+        out.putLong(SelfCheck.KEY_FCM_SAMPLE_GAP, FcmConnectionMonitor.maxSampleGap());
+        out.putBoolean(SelfCheck.KEY_FCM_ELAPSED_TIME, true);
+        out.putString(SelfCheck.KEY_NIGHT_DIAGNOSTICS, NightDiagnostics.status());
+        out.putBoolean(SelfCheck.KEY_NIGHT_DIAGNOSTICS + ".error", NightDiagnostics.hasError());
         out.putStringArrayList(SelfCheck.KEY_EVENTS, FcmConnectionMonitor.events());
 
         ContentResolver resolver = context.getContentResolver();

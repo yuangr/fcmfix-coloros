@@ -84,6 +84,11 @@ report() {
     done
   done
 
+  section "FCMFix 夜间诊断（手动开启，固定容量，采样空档内状态未知）"
+  for journal in /data/system/fcmfix-coloros/night-previous.log /data/system/fcmfix-coloros/night-current.log; do
+    if [ -f "$journal" ]; then echo "-- $journal"; cat "$journal"; fi
+  done
+
   section "FCMFix / ColorOS Google 限制日志"
   # Match the module's "[fcmfix]" prefix, not the package name io.github.artifical0.fcmfix.coloros,
   # which window-manager logs mention all the time.
@@ -109,7 +114,8 @@ report() {
 
 if [ "$OUT" = "-" ]; then
   report "$@" 2>&1
+  echo "FCMFix report complete"
 else
-  report "$@" > "$OUT" 2>&1
+  { report "$@"; echo "FCMFix report complete"; } > "$OUT" 2>&1
   echo "已保存到 $OUT"
 fi

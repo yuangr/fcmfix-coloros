@@ -190,7 +190,8 @@ public class BroadcastFix extends XposedModule {
                     if (!allowed || intent == null || !FcmTrust.matches(intent.getAction(), target)) return;
                     if (entry) {
                         printLog("FCM trusted sender: uid=" + callerUid + ", target=" + target, true);
-                        SelfCheckCollector.recordPush(target);
+                        SelfCheckCollector.recordPushRequest(target);
+                        OplusHooks.STATUS.recordEffect("broadcast entry point", android.os.SystemClock.elapsedRealtime());
                         OplusProxyFix.beginFcmDeliveryWindow(target);
                         if (getBooleanConfig("includeIceBoxDisableApp", false)
                                 && !IceboxUtils.isAppEnabled(context, target)) {
@@ -204,6 +205,7 @@ public class BroadcastFix extends XposedModule {
                 } catch (Throwable error) {
                     // Keep the failure mask until the original invocation has finished.
                     param.addFinallyAction(FcmTrust.enter(null, -1));
+                    OplusHooks.STATUS.recordRuntimeFailure(entry ? "broadcast entry point" : "broadcastIntentLocked", error);
                     logOnce("FCM broadcast hook failed: " + method + ": " + error);
                 }
             }

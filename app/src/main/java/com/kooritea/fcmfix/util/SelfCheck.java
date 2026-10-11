@@ -25,6 +25,9 @@ public final class SelfCheck {
     public static final String KEY_FCM_SINCE = "check.fcmSince";
     public static final String KEY_FCM_DROPS = "check.fcmDrops";
     public static final String KEY_FCM_MONITOR_START = "check.fcmMonitorStart";
+    public static final String KEY_FCM_SAMPLE_GAP = "check.fcmSampleGap";
+    public static final String KEY_FCM_ELAPSED_TIME = "check.fcmElapsedTime";
+    public static final String KEY_NIGHT_DIAGNOSTICS = "check.nightDiagnostics";
     /** Timeline lines, oldest first: screen, deep Doze, network, FCM connection, pushes. */
     public static final String KEY_EVENTS = "check.events";
     public static final int FCM_NONE = 0;
@@ -131,19 +134,20 @@ public final class SelfCheck {
     /** since is when system_server first saw the current socket, sampling about once a minute. */
     public static Verdict fcmConnection(int state, String remote, long since, int drops,
                                         long monitorStart, long now) {
-        String dropText = drops == 0 ? "开机以来没有断开过" : "开机以来断开 " + drops + " 次，时间见“最近事件”";
+        String dropText = "当前监测会话观察到连接中断或替换 " + drops + " 次，时间见“最近事件”";
         if (state == FCM_CONNECTED) {
             String age = since - monitorStart < 120_000
-                    ? "FCMFix 开始监测时已连接，至今 " + duration(now - since)
-                    : "已持续 " + duration(now - since);
-            return new Verdict(Level.OK, "已连接 " + remote + "\n" + age + "\n" + dropText, null);
+                    ? "开始监测时已观察到该连接，距首次观察 " + duration(now - since)
+                    : "距首次观察 " + duration(now - since);
+            return new Verdict(Level.INFO, "已发现 GMS 候选 TCP 连接 " + remote + "\n" + age + "\n" + dropText,
+                    "TCP 已建立不能确认 FCM 协议健康；休眠时存在采样空档，请结合实际提醒或 FCM Diagnostics 判断");
         }
         if (state == FCM_CONNECTING) {
             return new Verdict(Level.WARN, "正在连接 " + remote + "，尚未成功\n" + dropText,
                     "一直停在这里，通常是 5228 端口被封或代理不通");
         }
         if (state == FCM_NONE) {
-            return new Verdict(Level.WARN, "GMS 当前没有连接 FCM 服务器（5228–5230 端口）\n" + dropText,
+            return new Verdict(Level.WARN, "未发现 GMS 的 5228–5230 候选 TCP 连接\n" + dropText,
                     "刚亮屏或刚切换网络时可能正在重连，稍后再查；一直如此通常是网络问题。少数网络下 GMS 改走 443 端口，以实际收到推送为准");
         }
         return new Verdict(Level.UNKNOWN, "无法检测", null);

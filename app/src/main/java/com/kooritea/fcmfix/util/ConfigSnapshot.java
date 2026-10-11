@@ -15,8 +15,12 @@ public final class ConfigSnapshot {
     /** FCM apps the user unticked while auto-allow is on; they stay out of the automatic set. */
     public final Set<String> excludeList;
     public final Map<String, Boolean> options;
+    public final long nightDiagnosticsUntil;
 
     public ConfigSnapshot(Map<String, ?> values) {
+        Object until = values.get(DiagnosticSession.CONFIG_UNTIL);
+        if (until != null && !(until instanceof Long)) throw new IllegalArgumentException("Invalid diagnostic deadline");
+        nightDiagnosticsUntil = until == null ? 0 : Math.max(0, (Long) until);
         allowList = packageSet(values, "allowList");
         excludeList = packageSet(values, "excludeList");
         Map<String, Boolean> flags = new HashMap<>();

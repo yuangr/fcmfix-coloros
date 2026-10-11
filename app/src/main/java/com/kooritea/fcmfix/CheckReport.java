@@ -253,7 +253,8 @@ final class CheckReport {
                     status.getLong(SelfCheck.KEY_FCM_SINCE),
                     status.getInt(SelfCheck.KEY_FCM_DROPS),
                     status.getLong(SelfCheck.KEY_FCM_MONITOR_START),
-                    System.currentTimeMillis()));
+                    status.getBoolean(SelfCheck.KEY_FCM_ELAPSED_TIME)
+                            ? android.os.SystemClock.elapsedRealtime() : System.currentTimeMillis()));
         }
         rows.add(new Row(Level.INFO, "FCM 连接状态", "点击打开 FCM Diagnostics，查看是否为 connected。"
                 + "亮屏时也一直 disconnected 通常是网络问题（DNS 被污染或 5228 端口被封），模块无法解决",
@@ -295,19 +296,33 @@ final class CheckReport {
         List<String> active = status.getStringArrayList(process + HookStatus.ACTIVE_SUFFIX);
         List<String> failed = status.getStringArrayList(process + HookStatus.FAILED_SUFFIX);
         List<String> skipped = status.getStringArrayList(process + HookStatus.SKIPPED_SUFFIX);
+        List<String> runtime = status.getStringArrayList(process + HookStatus.RUNTIME_SUFFIX);
+        int runtimeErrors = status.getInt(process + HookStatus.RUNTIME_ERRORS_SUFFIX, 0);
         String title = label + " Hook";
         Row row;
         if (active == null || failed == null) {
             row = add(Level.FAIL, title, "未加载", "确认已勾选" + label + "作用域，并在勾选后重启过手机");
         } else if (!failed.isEmpty()) {
-            row = add(Level.WARN, title, active.size() + " 项生效，" + failed.size() + " 项失配：\n" + String.join("\n", failed),
+            row = add(Level.WARN, title, active.size() + " 项已注册，" + failed.size() + " 项失配：\n" + String.join("\n", failed),
                     "失配的项目与当前固件不匹配，请导出完整报告反馈");
         } else {
-            row = add(Level.OK, title, active.size() + " 项生效"
+            row = add(runtimeErrors > 0 ? Level.WARN : Level.OK, title, active.size() + " 项已注册"
                     + (skipped == null || skipped.isEmpty() ? "" : "，" + skipped.size()
                     + " 项不适用（未安装）：\n" + String.join("\n", skipped)), null);
         }
-        if (active != null && !active.isEmpty()) row.copyExtra = "生效：" + String.join("、", active);
+        if (active != null && status.getInt(process + HookStatus.VERSION_SUFFIX, -1) != BuildConfig.VERSION_CODE) {
+            add(Level.WARN, label + "加载版本", "运行中的模块版本与当前APK不同或未知",
+                    "升级后需要重启，让系统框架和电池重新加载新代码");
+        }
+        if (runtimeErrors > 0) {
+            add(Level.WARN, label + " Hook 运行健康", runtimeErrors + " 个分组记录了运行异常或暂不可执行",
+                    "注册成功不等于实际防护有效；复制结果或导出报告查看运行记录");
+        }
+        if (!summary && runtime != null && !runtime.isEmpty()) {
+            add(Level.INFO, label + " Hook 运行记录", String.join("\n", runtime),
+                    "回调次数仅证明方法被调用；保护/适配动作也不等于最终通知成功。零命中可能是场景未发生");
+        }
+        if (active != null && !active.isEmpty()) row.copyExtra = "已注册：" + String.join("、", active);
         if (skipped != null && !skipped.isEmpty()) {
             row.copyExtra = (row.copyExtra == null ? "" : row.copyExtra + "\n")
                     + "不适用（未安装）：" + String.join("、", skipped);
@@ -337,7 +352,7 @@ final class CheckReport {
             if (fcm < 0) {
                 add(Level.WARN, "自动放行", "已开启，系统框架还没有完成应用扫描", "稍后重新打开自查；一直如此请重启手机");
             } else {
-                add(Level.INFO, "自动放行", "已开启，系统框架识别到 " + fcm + " 个包含 FCM 的应用", null);
+                add(Level.INFO, "自动放行", "已开启，系统框架识别到 " + fcm + " 个声明 FCM 组件的应用", null);
             }
         }
     }
@@ -352,6 +367,14 @@ final class CheckReport {
     }
 
     private void addAppRows(Bundle status) {
+        String night = status.getString(SelfCheck.KEY_NIGHT_DIAGNOSTICS);
+        if (!summary && night != null) {
+            add(status.getBoolean(SelfCheck.KEY_NIGHT_DIAGNOSTICS + ".error") ? Level.WARN : Level.INFO,
+                    "整夜诊断", night, "导出完整报告可包含夜间记录；停止后保留日志，下一次记录按固定容量轮转");
+            long gap = status.getLong(SelfCheck.KEY_FCM_SAMPLE_GAP);
+            add(Level.INFO, "连接观察覆盖", "最长采样间隔 " + SelfCheck.duration(gap),
+                    "间隔内状态未知；首次和末次看到相同TCP连接不证明期间持续在线");
+        }
         ArrayList<String> apps = status.getStringArrayList(SelfCheck.KEY_APPS);
         if (apps == null) return;
         section("放行的应用（" + apps.size() + "）");
@@ -377,10 +400,10 @@ final class CheckReport {
             long count = app.getLong(SelfCheck.APP_PUSH_COUNT);
             StringBuilder detail = new StringBuilder(notify.text);
             if (bucket != null) detail.append(" · ").append(bucket.text);
-            detail.append('\n').append(lastPush == 0 ? "开机以来还没有收到推送"
-                    : "最近一次推送：" + DateUtils.getRelativeTimeSpanString(lastPush) + "（开机以来 " + count + " 次）");
+            detail.append('\n').append(lastPush == 0 ? "开机以来尚未观察到可信投递请求"
+                    : "最近一次可信投递请求：" + DateUtils.getRelativeTimeSpanString(lastPush) + "（开机以来 " + count + " 次）");
             detail.append('\n').append(app.getBoolean(SelfCheck.APP_RUNNING) ? "进程运行中"
-                    : app.getBoolean(SelfCheck.APP_STOPPED) ? "已停止（被划掉或强行停止），收到推送时由模块拉起" : "未运行");
+                    : app.getBoolean(SelfCheck.APP_STOPPED) ? "已停止；收到可信投递请求时模块会尝试拉起" : "未运行");
             String hint = notify.hint != null ? notify.hint : bucket != null ? bucket.hint : null;
             // Only a fully disabled app counts on the status card; a muted channel is often deliberate.
             appRows.add(new Row(level, label, detail.toString(), hint, () -> openAppDetails(name),
@@ -396,7 +419,7 @@ final class CheckReport {
         });
         for (int index : order) rows.add(appRows.get(index));
         add(Level.INFO, "推送记录说明",
-                "“最近一次推送”表示 GMS 已把消息交给该应用。收到了推送却没有弹出通知，问题通常在应用自己的通知设置或应用本身",
+                "“可信投递请求”表示系统观察到 GMS 向该应用发起广播，尚不能证明应用已接收或发布通知；服务直投或 GMS 代理通知也可能不计入。没有通知时需继续核对系统交付、应用处理及通知设置",
                 null);
     }
 
@@ -406,7 +429,7 @@ final class CheckReport {
         if (events == null) return;
         section("最近事件（开机以来，最新在上）");
         if (events.isEmpty()) {
-            add(Level.INFO, "暂无事件", "熄屏、深度 Doze、网络切换、FCM 连接变化和收到推送会记录在这里", null);
+            add(Level.INFO, "暂无事件", "熄屏、深度 Doze、网络切换、FCM 连接变化和可信投递请求会记录在这里", null);
             return;
         }
         List<String> newestFirst = new ArrayList<>(events);

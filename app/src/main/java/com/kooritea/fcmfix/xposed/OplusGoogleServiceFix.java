@@ -236,6 +236,7 @@ public class OplusGoogleServiceFix extends XposedModule {
                             NightNetworkWhitelist.withUid((java.util.List<?>) param.args[0], uid);
                     if (whitelist == null) return;
                     param.args[0] = whitelist;
+                    OplusHooks.STATUS.recordEffect("night network whitelist", android.os.SystemClock.elapsedRealtime());
                     printLog("Oplus night network whitelist: added GMS uid=" + uid, true);
                 }
 

@@ -237,6 +237,7 @@ public class OplusProxyFix extends XposedModule {
             if (!"unfreezeIfNeed".equals(method.getName())) {
                 continue;
             }
+            if (UnfreezeArguments.create(method.getParameterTypes(), 10000) == null) continue;
             int score = 0;
             for (Class<?> type : method.getParameterTypes()) {
                 if (type == int.class || type == Integer.class) score += 4;
@@ -258,6 +259,7 @@ public class OplusProxyFix extends XposedModule {
         }
         Object receiver = Modifier.isStatic(method.getModifiers()) ? null : sOplusProxyWakeLock;
         if (!Modifier.isStatic(method.getModifiers()) && receiver == null) {
+            OplusHooks.STATUS.recordUnavailable("OplusProxyWakeLock", "解冻实例尚未捕获");
             return;
         }
 
@@ -268,18 +270,22 @@ public class OplusProxyFix extends XposedModule {
 
         Object[] args = UnfreezeArguments.create(method.getParameterTypes(), uid);
         if (args == null) {
+            OplusHooks.STATUS.recordRuntimeFailure("OplusProxyWakeLock", new IllegalArgumentException("unsupported " + describeMethod(method)));
             printLog("unsupported Oplus unfreeze arguments: " + describeMethod(method));
             return;
         }
 
         try {
             method.invoke(receiver, args);
+            OplusHooks.STATUS.recordEffect("OplusProxyWakeLock", SystemClock.elapsedRealtime());
             printLog("unfreeze " + target + ", uid=" + uid, true);
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause() == null ? e : e.getCause();
+            OplusHooks.STATUS.recordRuntimeFailure("OplusProxyWakeLock", cause);
             printLog("Oplus unfreeze invocation failed: " + cause.getClass().getSimpleName()
                     + ": " + cause.getMessage());
         } catch (Throwable e) {
+            OplusHooks.STATUS.recordRuntimeFailure("OplusProxyWakeLock", e);
             printLog("Oplus unfreeze invocation failed: " + e.getClass().getSimpleName()
                     + ": " + e.getMessage());
         }
@@ -331,6 +337,7 @@ public class OplusProxyFix extends XposedModule {
                     if (!networkRestore && isInFcmDeliveryWindow(uid)) {
                         // true is the restore/remove-from-firewall branch in ColorOS 16.
                         param.args[0] = Pair.create(uid, true);
+                        OplusHooks.STATUS.recordEffect("OAppNetControlService", SystemClock.elapsedRealtime());
                         printLog("Oplus FCM socket-close bypass: pkg="
                                 + getFcmDeliveryPackage(uid) + ", uid=" + uid, true);
                     }
