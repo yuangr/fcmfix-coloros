@@ -26,4 +26,19 @@ public class NightNetworkWhitelistTest {
     @Test public void nullEntriesAreTolerated() {
         assertEquals(Arrays.asList(null, "10123"), NightNetworkWhitelist.withUid(Arrays.asList((String) null), 10123));
     }
+
+    @Test public void protectsGmsAndVpnWithoutChangingOemPidEntriesOrOtherApps() {
+        List<String> original = List.of("1000:23231", "10153", "10112");
+        List<Object> result = NightNetworkWhitelist.withAppUids(original, 10112, 10397, 10397);
+        assertEquals(List.of("1000:23231", "10153", "10112", "10397"), result);
+        assertEquals(List.of("1000:23231", "10153", "10112"), original);
+        assertFalse(result.contains("10379"));
+        assertNull(NightNetworkWhitelist.withAppUids(result, 10112, 10397));
+    }
+
+    @Test public void invalidAndOtherUserTransportUidsAreNeverWhitelisted() {
+        assertNull(NightNetworkWhitelist.withAppUids(List.of("1000:23231"), -1, 0, 1000, 110112));
+        assertEquals(List.of("1000:23231", "10112"),
+                NightNetworkWhitelist.withAppUids(List.of("1000:23231"), -1, 10112, 110397));
+    }
 }

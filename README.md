@@ -1,6 +1,6 @@
 # FCMFix ColorOS 本机适配
 
-本仓库派生自 [Artifical0/fcmfix-coloros](https://github.com/Artifical0/fcmfix-coloros)，基于 `v13.0-rc6`（`dee734f`）适配 **PLQ110_16.0.10.500(CN01)**。版本 `13.0-rc6-plq110.1`，独立包名 `io.github.artifical0.fcmfix.coloros.local`。
+本仓库派生自 [Artifical0/fcmfix-coloros](https://github.com/Artifical0/fcmfix-coloros)，基于 `v13.0-rc6`（`dee734f`）适配 **一加 Ace 6 / PLQ110_16.0.10.500(CN01)**。版本 `13.0-rc6-plq110.5`，独立包名 `io.github.artifical0.fcmfix.coloros.local`。
 
 本分支不是上游官方发行版。适配内容及验证边界见 [适配说明](docs/plq110-adaptation.md)。只启用一个 FCMFix 模块。
 
@@ -12,7 +12,7 @@ GMS 和应用之间。本模块解除这一段的限制，并阻止 ColorOS 切�
 
 | | |
 | --- | --- |
-| 当前版本 | `13.0-rc6-plq110.1`（本仓库源码构建） |
+| 当前版本 | `13.0-rc6-plq110.5`（本仓库源码构建） |
 | 支持系统 | ColorOS 16、ColorOS 17（Android 16 / 17）国行 |
 | 验证机型 | 本适配版：PLQ110 / PLQ110_16.0.10.500(CN01)；上游验证：PLK110 |
 | 作用域 | `系统框架` + `电池`（`com.oplus.battery`），两者都要勾选 |
@@ -38,6 +38,7 @@ GMS 和应用之间。本模块解除这一段的限制，并阻止 ColorOS 切�
 - 推送到达后，应用不会马上被 ColorOS 再次冻结或断网，能及时拉取消息内容；
 - ColorOS 不再把 GMS、Play 商店等 Google 核心服务设为禁止联网（包括开机解锁后的自动禁网）；
 - 熄屏、Doze 以及“睡眠待机优化”按应用断网期间，GMS 保持联网；网络恢复后自动重连。
+- Ace 6 上述固件新增深睡路由适配：优先使用原厂 UID 白名单限制后台联网，保留 GMS 和当前/始终开启 VPN 的传输连接；其他应用保留原厂规则。此新增分支的整夜效果尚待实机验收，见[核对与测试边界](docs/ace6-night-network-routing.md)。
 
 具体改了哪些系统行为，见[工作原理](docs/how-it-works.md)。
 
@@ -49,7 +50,7 @@ GMS 和应用之间。本模块解除这一段的限制，并阻止 ColorOS 切�
 - 应用本身不使用 FCM，或服务器没有发送消息；
 - Google Play 服务未登录、被禁用；
 - 应用的通知权限或应用内通知开关已关闭；
-- 系统整机断网（例如深度睡眠直接关闭 Wi-Fi / 移动数据），此时所有推送通道都会断开；
+- 飞行模式、用户手动断网及不支持的固件直接关闭 Wi-Fi / 移动数据；Ace 6 新分支遇原厂网络异常模式或原生服务失败时仍可能断网，不承诺所有路径都保持连接；
 - 工作资料、应用分身和多用户下的推送（未承诺支持）；
 - OTA 后 ColorOS 修改了相关代码，导致 Hook 失配。
 
@@ -119,6 +120,7 @@ FCMFix 顶部的状态卡片显示“一切正常”；
 ## 文档
 
 - [工作原理](docs/how-it-works.md)：ColorOS 的限制位置、模块改动、实机验证记录
+- [一加 Ace 6 夜间断网适配](docs/ace6-night-network-routing.md)：实际固件调用链、VPN 传输白名单和验收要求
 - [如何提交问题与日志](docs/report-issue.md)
 - [一加 15 ColorOS 17 Hook 核对](docs/oneplus15-coloros17-fcm-analysis.md)
 - [一加 15 ColorOS 16 国行/国际版差分与 Hook 分析](docs/oneplus15-coloros16-fcm-analysis.md)

@@ -20,4 +20,15 @@ public final class NightNetworkWhitelist {
         whitelist.add(entry);
         return whitelist;
     }
+
+    /** Add only owner-user app UIDs. Preserve OEM entries and never mutate its shared list. */
+    public static List<Object> withAppUids(List<?> original, int... uids) {
+        List<Object> copy = null;
+        for (int uid : uids) {
+            if (uid < 10000 || uid >= 100000) continue;
+            List<Object> next = withUid(copy == null ? original : copy, uid);
+            if (next != null) copy = next;
+        }
+        return copy;
+    }
 }

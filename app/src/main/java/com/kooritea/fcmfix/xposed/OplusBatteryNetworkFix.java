@@ -44,6 +44,7 @@ public class OplusBatteryNetworkFix extends XposedModule {
         runHook("Oplus Battery Google restrict broadcast", this::startHookGoogleRestrictBroadcast);
         runHook("Oplus Battery GMS user-change flag", this::startHookIgnoredUserChange);
         runHook("Oplus Battery deep-sleep network whitelist", this::startHookDeepSleepNetworkWhitelist);
+        new Plq110DeepSleepFix(classLoader);
     }
 
     /**
@@ -95,7 +96,7 @@ public class OplusBatteryNetworkFix extends XposedModule {
                         || !java.util.List.class.isAssignableFrom(method.getReturnType())) continue;
                 XposedBridge.hookMethod(method, new XC_MethodHook() {
                     @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                         if (param.hasThrowable() || !(param.getResult() instanceof java.util.List)
                                 || context == null) return;
                         int uid;
@@ -106,6 +107,12 @@ public class OplusBatteryNetworkFix extends XposedModule {
                         // Copy so immutable or shared firmware lists remain safe.
                         java.util.List<Object> whitelist = NightNetworkWhitelist.withUid(
                                 (java.util.List<?>) param.getResult(), uid);
+                        if (com.kooritea.fcmfix.util.NightHookCompatibility.isReviewedLegacyFirmware(android.os.Build.DISPLAY)) {
+                            java.util.List<Object> transport = FcmTransportWhitelist.append(context,
+                                    whitelist == null ? (java.util.List<?>) param.getResult() : whitelist,
+                                    "Oplus Battery deep-sleep network whitelist");
+                            if (transport != null) whitelist = transport;
+                        }
                         if (whitelist != null) param.setResult(whitelist);
                         printLog("Oplus Battery deep-sleep network whitelist: GMS uid=" + uid, true);
                     }
