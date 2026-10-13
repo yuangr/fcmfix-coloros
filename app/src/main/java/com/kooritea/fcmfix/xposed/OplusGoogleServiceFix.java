@@ -228,12 +228,18 @@ public class OplusGoogleServiceFix extends XposedModule {
             }
             XposedBridge.hookMethod(method, new XC_MethodHook() {
                 @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     if ((Integer) param.args[1] == 1 || !(param.args[0] instanceof java.util.List)) return;
                     int uid = getTargetUidFromPackageName(GOOGLE_GMS_PACKAGE);
                     if (uid < 0) return;
                     java.util.List<Object> whitelist =
                             NightNetworkWhitelist.withUid((java.util.List<?>) param.args[0], uid);
+                    if (NightHookCompatibility.isReviewedLegacyFirmware(android.os.Build.DISPLAY)) {
+                        java.util.List<Object> transport = FcmTransportWhitelist.append(context,
+                                whitelist == null ? (java.util.List<?>) param.args[0] : whitelist,
+                                "night network whitelist");
+                        if (transport != null) whitelist = transport;
+                    }
                     if (whitelist == null) return;
                     param.args[0] = whitelist;
                     OplusHooks.STATUS.recordEffect("night network whitelist", android.os.SystemClock.elapsedRealtime());

@@ -3,6 +3,8 @@
 基线：Artifical0/fcmfix-coloros v13.0-rc6，dee734faccdc6d479e1668b8351319106ec583f5。
 验证固件：PLQ110_16.0.10.500(CN01)，Android 16/API 36，Vector 2.2/API 101。
 
+本文下方为初版适配与既有测试记录。当前 `.5` 新增的一加 Ace 6 夜间路由修复及未完成的验收见[夜间网络适配](ace6-night-network-routing.md)；初版测试不能作为新分支已通过的证据。
+
 ## 改动
 
 - 电池深睡联网白名单：旧接口不存在时，适配 determineNetWorkWhiteUidList() 返回值，保留原名单并追加缺少的 GMS UID，不修改断网目标列表。
